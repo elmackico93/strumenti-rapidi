@@ -1,0 +1,471 @@
+// Servizio PDF avanzato per StrumentiRapidi.it
+import { saveAs } from 'file-saver';
+import JSZip from 'jszip';
+import { PDFDocument } from 'pdf-lib';
+import mammoth from 'mammoth';
+import { Document, Packer, Paragraph, TextRun } from 'docx';
+
+class PDFService {
+  constructor() {
+    // Inizializza il worker
+    this.worker = new Worker(new URL('../workers/pdfWorker.js', import.meta.url), { type: 'module' });
+    
+    // Avvia il contatore per i task
+    this.taskId = 0;
+    
+    // Mappa per le promesse in attesa
+    this.pendingTasks = new Map();
+    
+    // Configura il listener per i messaggi del worker
+    this.worker.onmessage = (e) => {
+      const { status, result, error, taskId } = e.data;
+      const taskPromise = this.pendingTasks.get(taskId);
+      
+      if (taskPromise) {
+        if (status === 'success') {
+          taskPromise.resolve(result);
+        } else {
+          taskPromise.reject(new Error(error || 'Task fallito'));
+        }
+        this.pendingTasks.delete(taskId);
+      }
+    };
+    
+    // Gestione degli errori del worker
+    this.worker.onerror = (e) => {
+      console.error('Errore nel worker PDF:', e);
+    };
+  }
+  
+  // Esegue un task nel worker
+  async executeTask(task, fileData, options = {}) {
+    const taskId = this.taskId++;
+    
+    return new Promise((resolve, reject) => {
+      this.pendingTasks.set(taskId, { resolve, reject });
+      
+      this.worker.postMessage({
+        taskId,
+        task,
+        fileData,
+        options
+      });
+    });
+  }
+  
+  // Converte un File/Blob in ArrayBuffer
+  async fileToArrayBuffer(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  }
+  
+  // Converte PDF in immagini
+  async convertToImages(pdfFile, options = {}) {
+    try {
+      // Validazione
+      if (!pdfFile || !(pdfFile instanceof File || pdfFile instanceof Blob)) {
+        throw new Error('File PDF non valido');
+      }
+      
+      const pdfArrayBuffer = await this.fileToArrayBuffer(pdfFile);
+      
+      // Esegui la conversione nel worker
+      const result = await this.executeTask('convertToImages', pdfArrayBuffer, options);
+      
+      if (!result.success) {
+        throw new Error('Conversione fallita');
+      }
+      
+      // Converti i dati delle immagini in Blob
+      const images = result.images.map(img => {
+        return {
+          pageNumber: img.pageNumber,
+          width: img.width,
+          height: img.height,
+          blob: new Blob([img.dataUrl], { type: `image/${options.format === 'jpg' ? 'jpeg' : options.format}` }),
+          size: img.size
+        };
+      });
+      
+      // Se c'è più di una pagina, crea un file ZIP
+      if (images.length > 1) {
+        const zip = new JSZip();
+        
+        // Aggiungi ogni immagine al ZIP
+        for (const img of images) {
+          zip.file(`page_${img.pageNumber}.${options.format}`, img.blob);
+        }
+        
+        // Genera il file ZIP
+        const zipContent = await zip.generateAsync({ type: 'blob' });
+        
+        return {
+          success: true,
+          type: 'zip',
+          blob: zipContent,
+          filename: `images.zip`,
+          totalImages: images.length,
+          format: options.format
+        };
+      } else if (images.length === 1) {
+        // Se c'è solo una pagina, restituisci l'immagine direttamente
+        return {
+          success: true,
+          type: 'image',
+          blob: images[0].blob,
+          filename: `image.${options.format}`,
+          width: images[0].width,
+          height: images[0].height,
+          format: options.format
+        };
+      } else {
+        throw new Error('Nessuna immagine generata');
+      }
+    } catch (error) {
+      console.error('Errore durante la conversione PDF in immagini:', error);
+      throw error;
+    }
+  }
+  
+  // Estrae il testo da un PDF
+  async extractText(pdfFile, options = {}) {
+    try {
+      // Validazione
+      if (!pdfFile || !(pdfFile instanceof File || pdfFile instanceof Blob)) {
+        throw new Error('File PDF non valido');
+      }
+      
+      const pdfArrayBuffer = await this.fileToArrayBuffer(pdfFile);
+      
+      // Esegui l'estrazione del testo nel worker
+      const result = await this.executeTask('extractText', pdfArrayBuffer, options);
+      
+      if (!result.success) {
+        throw new Error('Estrazione del testo fallita');
+      }
+      
+      // Crea un blob per il download
+      const textBlob = new Blob([result.fullText], { type: 'text/plain;charset=utf-8' });
+      
+      return {
+        success: true,
+        blob: textBlob,
+        filename: 'extracted_text.txt',
+        text: result.fullText,
+        pages: result.pages
+      };
+    } catch (error) {
+      console.error('Errore durante l\'estrazione del testo:', error);
+      throw error;
+    }
+  }
+  
+  // Converte PDF in HTML
+  async convertToHTML(pdfFile, options = {}) {
+    try {
+      // Prima estrai il testo
+      const textResult = await this.extractText(pdfFile, options);
+      
+      if (!textResult.success) {
+        throw new Error('Estrazione del testo fallita');
+      }
+      
+      // Genera un HTML semplice
+      let html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Documento convertito</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; margin: 2em; }
+    .page { margin-bottom: 2em; padding-bottom: 1em; border-bottom: 1px solid #ddd; }
+    h2 { color: #333; font-size: 1.2em; margin-top: 1.5em; }
+  </style>
+</head>
+<body>
+  <h1>Documento convertito</h1>`;
+      
+      // Aggiungi il contenuto di ogni pagina
+      for (const page of textResult.pages) {
+        html += `\n  <div class="page">
+    <h2>Pagina ${page.pageNumber}</h2>
+    <div class="content">
+      ${page.text.replace(/\n/g, '<br>').replace(/ {2,}/g, '&nbsp; ')}
+    </div>
+  </div>`;
+      }
+      
+      html += '\n</body>\n</html>';
+      
+      // Crea un blob per il download
+      const htmlBlob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      
+      return {
+        success: true,
+        blob: htmlBlob,
+        filename: 'converted_document.html',
+        html
+      };
+    } catch (error) {
+      console.error('Errore durante la conversione in HTML:', error);
+      throw error;
+    }
+  }
+  
+  // Converte PDF in DOCX (semplificato)
+  async convertToDocx(pdfFile, options = {}) {
+    try {
+      // Prima estrai il testo
+      const textResult = await this.extractText(pdfFile, options);
+      
+      if (!textResult.success) {
+        throw new Error('Estrazione del testo fallita');
+      }
+      
+      // Crea un documento DOCX utilizzando docx.js
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: textResult.pages.map(page => {
+            // Crea un titolo per ogni pagina
+            const paragraphs = [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: `Pagina ${page.pageNumber}`,
+                    bold: true,
+                    size: 28
+                  })
+                ]
+              })
+            ];
+            
+            // Aggiungi i paragrafi del testo
+            const textParagraphs = page.text
+              .split('\n')
+              .filter(line => line.trim().length > 0)
+              .map(line => new Paragraph({
+                children: [new TextRun(line)]
+              }));
+            
+            return [...paragraphs, ...textParagraphs, new Paragraph("")];
+          }).flat()
+        }]
+      });
+      
+      // Genera il file DOCX
+      const buffer = await Packer.toBuffer(doc);
+      const docxBlob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      
+      return {
+        success: true,
+        blob: docxBlob,
+        filename: 'converted_document.docx'
+      };
+    } catch (error) {
+      console.error('Errore durante la conversione in DOCX:', error);
+      throw error;
+    }
+  }
+  
+  // Comprimi un PDF
+  async compressPDF(pdfFile, options = {}) {
+    try {
+      // Validazione
+      if (!pdfFile || !(pdfFile instanceof File || pdfFile instanceof Blob)) {
+        throw new Error('File PDF non valido');
+      }
+      
+      const pdfArrayBuffer = await this.fileToArrayBuffer(pdfFile);
+      
+      // Esegui la compressione nel worker
+      const result = await this.executeTask('compressPDF', pdfArrayBuffer, options);
+      
+      if (!result.success) {
+        throw new Error('Compressione fallita');
+      }
+      
+      // Crea un blob per il download
+      const compressedPdfBlob = new Blob([result.data], { type: 'application/pdf' });
+      
+      return {
+        success: true,
+        blob: compressedPdfBlob,
+        filename: 'compressed.pdf',
+        originalSize: result.originalSize,
+        compressedSize: result.compressedSize,
+        compressionRate: result.compressionRate
+      };
+    } catch (error) {
+      console.error('Errore durante la compressione del PDF:', error);
+      throw error;
+    }
+  }
+  
+  // Proteggi un PDF con password
+  async protectPDF(pdfFile, options = {}) {
+    try {
+      // Validazione
+      if (!pdfFile || !(pdfFile instanceof File || pdfFile instanceof Blob)) {
+        throw new Error('File PDF non valido');
+      }
+      
+      if (!options.password) {
+        throw new Error('Password non specificata');
+      }
+      
+      const pdfArrayBuffer = await this.fileToArrayBuffer(pdfFile);
+      
+      // Esegui la protezione nel worker
+      const result = await this.executeTask('protectPDF', pdfArrayBuffer, options);
+      
+      if (!result.success) {
+        throw new Error('Protezione fallita');
+      }
+      
+      // Crea un blob per il download
+      const protectedPdfBlob = new Blob([result.data], { type: 'application/pdf' });
+      
+      return {
+        success: true,
+        blob: protectedPdfBlob,
+        filename: 'protected.pdf',
+        size: result.size
+      };
+    } catch (error) {
+      console.error('Errore durante la protezione del PDF:', error);
+      throw error;
+    }
+  }
+  
+  // Dividi un PDF in più file
+  async splitPDF(pdfFile, options = {}) {
+    try {
+      // Validazione
+      if (!pdfFile || !(pdfFile instanceof File || pdfFile instanceof Blob)) {
+        throw new Error('File PDF non valido');
+      }
+      
+      const pdfArrayBuffer = await this.fileToArrayBuffer(pdfFile);
+      
+      // Prepara le opzioni di divisione
+      const splitOptions = {
+        pageRanges: []
+      };
+      
+      // Elabora le opzioni di intervallo di pagine
+      if (options.pageRange === 'custom' && options.customPages) {
+        // Parse range come "1-5,8,11-13"
+        const ranges = options.customPages.split(',');
+        for (const range of ranges) {
+          if (range.includes('-')) {
+            const [start, end] = range.split('-').map(Number);
+            if (!isNaN(start) && !isNaN(end) && start > 0 && end >= start) {
+              splitOptions.pageRanges.push({ start, end });
+            }
+          } else {
+            const pageNum = Number(range.trim());
+            if (!isNaN(pageNum) && pageNum > 0) {
+              splitOptions.pageRanges.push({ start: pageNum, end: pageNum });
+            }
+          }
+        }
+      }
+      
+      // Esegui la divisione nel worker
+      const result = await this.executeTask('splitPDF', pdfArrayBuffer, splitOptions);
+      
+      if (!result.success) {
+        throw new Error('Divisione fallita');
+      }
+      
+      // Se c'è più di un file, crea un file ZIP
+      if (result.files.length > 1) {
+        const zip = new JSZip();
+        
+        // Aggiungi ogni file PDF al ZIP
+        for (const file of result.files) {
+          zip.file(file.name, file.data);
+        }
+        
+        // Genera il file ZIP
+        const zipContent = await zip.generateAsync({ type: 'blob' });
+        
+        return {
+          success: true,
+          type: 'zip',
+          blob: zipContent,
+          filename: 'split_pdfs.zip',
+          totalFiles: result.files.length
+        };
+      } else if (result.files.length === 1) {
+        // Se c'è solo un file, restituiscilo direttamente
+        return {
+          success: true,
+          type: 'pdf',
+          blob: new Blob([result.files[0].data], { type: 'application/pdf' }),
+          filename: result.files[0].name,
+          pageRange: result.files[0].range
+        };
+      } else {
+        throw new Error('Nessun file generato');
+      }
+    } catch (error) {
+      console.error('Errore durante la divisione del PDF:', error);
+      throw error;
+    }
+  }
+  
+  // Unisci più PDF
+  async mergePDFs(pdfFiles, options = {}) {
+    try {
+      // Validazione
+      if (!pdfFiles || !Array.isArray(pdfFiles) || pdfFiles.length < 2) {
+        throw new Error('Sono necessari almeno due file PDF');
+      }
+      
+      // Converti tutti i file in ArrayBuffer
+      const pdfArrayBuffers = await Promise.all(
+        pdfFiles.map(file => this.fileToArrayBuffer(file))
+      );
+      
+      // Esegui l'unione nel worker
+      const result = await this.executeTask('mergePDFs', pdfArrayBuffers, options);
+      
+      if (!result.success) {
+        throw new Error('Unione fallita');
+      }
+      
+      // Crea un blob per il download
+      const mergedPdfBlob = new Blob([result.data], { type: 'application/pdf' });
+      
+      return {
+        success: true,
+        blob: mergedPdfBlob,
+        filename: 'merged.pdf',
+        size: result.size,
+        totalMergedFiles: pdfFiles.length
+      };
+    } catch (error) {
+      console.error('Errore durante l\'unione dei PDF:', error);
+      throw error;
+    }
+  }
+  
+  // Salva il risultato come file
+  downloadResult(result) {
+    if (!result || !result.success || !result.blob) {
+      throw new Error('Risultato non valido');
+    }
+    
+    saveAs(result.blob, result.filename);
+    return true;
+  }
+}
+
+// Esporta un'istanza singleton
+export const pdfService = new PDFService();

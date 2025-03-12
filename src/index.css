@@ -1,0 +1,55 @@
+@import "./styles/responsive-fixes.css";
+@import './styles/adaptive.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Light theme variables */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f9fc;
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --border-color: #e0e4e8;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-blur: 10px;
+  --shadow-color: rgba(0, 0, 0, 0.05);
+}
+
+.dark {
+  /* Dark theme variables */
+  --bg-primary: #1a1c23;
+  --bg-secondary: #282c34;
+  --text-primary: #e3e3e3;
+  --text-secondary: #a0a0a0;
+  --border-color: #3d4148;
+  --glass-bg: rgba(40, 44, 52, 0.7);
+  --glass-blur: 10px;
+  --shadow-color: rgba(0, 0, 0, 0.2);
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white bg-opacity-70 dark:bg-gray-800 dark:bg-opacity-70 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-xl shadow-lg;
+  }
+  
+  .primary-button {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .step-container {
+    @apply w-full max-w-4xl mx-auto p-4 md:p-6;
+  }
+}
