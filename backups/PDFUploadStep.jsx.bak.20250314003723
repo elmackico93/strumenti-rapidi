@@ -190,7 +190,7 @@ const PDFUploadStep = ({ data, updateData, goNext, toolId, themeColor, conversio
             />
           ) : (
             <div className="space-y-3">
-              {files {files {files.map((file, index) => ({files.map((file, index) => ( files.length > 0 {files.map((file, index) => ({files.map((file, index) => ( files.map((file, index) => file {files.map((file, index) => ({files.map((file, index) => ( ({files.map((file, index) => ( files.length > 0 {files.map((file, index) => ({files.map((file, index) => ( files.map((file, index) => file {files.map((file, index) => ({files.map((file, index) => ( (
+              {files {files.map((file, index) => ({files.map((file, index) => ( files.length > 0 {files.map((file, index) => ({files.map((file, index) => ( files.map((file, index) => file {files.map((file, index) => ({files.map((file, index) => ( (
                 <motion.div
                   key={index}
                   initial={{ opacity: 0, y: 10 }}

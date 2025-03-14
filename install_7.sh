@@ -1,3 +1,21 @@
+#!/bin/bash
+
+# fix-file-preview.sh - Fix undefined file errors in the FilePreview component
+# Created on: March 13, 2025
+
+echo "Starting FilePreview component fixes..."
+
+# Create backup directory if it doesn't exist
+mkdir -p backups
+
+# 1. Fix FilePreview.jsx component
+echo "Creating backup of FilePreview.jsx..."
+cp src/components/ui/FilePreview.jsx backups/FilePreview.jsx.bak.$(date +%Y%m%d%H%M%S)
+
+echo "Modifying FilePreview.jsx to handle undefined files..."
+
+# Create a temporary file with the fixed content
+cat > tmp_FilePreview.jsx << 'EOF'
 // src/components/ui/FilePreview.jsx
 import { useState, useEffect } from 'react';
 
@@ -141,3 +159,51 @@ const FilePreview = ({ file, onRemove }) => {
 };
 
 export default FilePreview;
+EOF
+
+# Replace the original file with our fixed version
+mv tmp_FilePreview.jsx src/components/ui/FilePreview.jsx
+
+# 2. Fix PDFUploadStep.jsx to properly handle file mapping
+echo "Creating backup of PDFUploadStep.jsx..."
+cp src/components/tools/pdf/PDFUploadStep.jsx backups/PDFUploadStep.jsx.bak.$(date +%Y%m%d%H%M%S)
+
+echo "Modifying PDFUploadStep.jsx to handle file mapping safely..."
+
+# Update file mapping to check for file existence
+sed -i 's/{files.map((file, index) => (/{files && files.length > 0 && files.map((file, index) => file && (/' src/components/tools/pdf/PDFUploadStep.jsx
+
+# 3. Check if we need to fix PDFPreview.jsx to handle file access safely
+echo "Creating backup of PDFPreview.jsx..."
+cp src/components/tools/pdf/PDFPreview.jsx backups/PDFPreview.jsx.bak.$(date +%Y%m%d%H%M%S)
+
+echo "Ensuring PDFPreview handles files safely..."
+
+# Update file access in PDFPreview to check for existence first
+sed -i 's/if (files && files.length > 0 && !isLoading) {/if (files && Array.isArray(files) && files.length > 0 && files[0] && !isLoading) {/' src/components/tools/pdf/PDFPreview.jsx
+
+# Also fix the PDFWebViewer component if it exists
+if [ -f "src/components/tools/pdf/PDFWebViewer.jsx" ]; then
+  echo "Creating backup of PDFWebViewer.jsx..."
+  cp src/components/tools/pdf/PDFWebViewer.jsx backups/PDFWebViewer.jsx.bak.$(date +%Y%m%d%H%M%S)
+  
+  echo "Modifying PDFWebViewer.jsx to handle file safety..."
+  
+  # Add additional checks at the beginning of the useEffect that loads the PDF
+  sed -i '/useEffect(() => {/,+2s/if (!file) return;/if (!file || !(file instanceof File || file instanceof Blob)) return;/' src/components/tools/pdf/PDFWebViewer.jsx
+fi
+
+# 4. Fix any file and folder handling in PDFUploadStep to ensure files state is properly initialized
+echo "Adding additional safety checks to PDFUploadStep initialization..."
+
+sed -i '/const PDFUploadStep/,/const \[files, setFiles\]/s/const \[files, setFiles\] = useState(\[\]);/const \[files, setFiles\] = useState(data.files || []);/' src/components/tools/pdf/PDFUploadStep.jsx
+
+# 5. Create additional empty workers directory if it doesn't exist (just to be safe)
+echo "Ensuring workers directory exists..."
+mkdir -p src/workers
+
+echo "All file preview fixes have been applied successfully!"
+echo "Backups of the original files were created in the ./backups directory."
+echo "Please restart your development server to see the changes."
+echo ""
+echo "If you still encounter issues, please check the browser console for error messages."

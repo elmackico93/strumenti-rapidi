@@ -7,7 +7,7 @@ import { useOS } from '../../../context/OSContext';
 const PDFPreview = ({ files, options, isLoading }) => {
   const { osType, isMobile } = useOS();
   // Use PDFWebViewer for actual PDF rendering
-  if (files if (files if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { Array.isArray(files) if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { files.length > 0 if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { files[0] if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { !isLoading) {if (files && files.length > 0 && !isLoading) { Array.isArray(files) if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { files.length > 0 if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { files[0] if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { !isLoading) {
+  if (files && files.length > 0 && !isLoading) {
     return <PDFWebViewer file={files[0]} />;
   }
   const [preview, setPreview] = useState(null);

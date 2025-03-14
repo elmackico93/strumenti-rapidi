@@ -1,33 +1,24 @@
-// src/components/tools/pdf/PDFPreview.jsx
-import PDFWebViewer from "./PDFWebViewer";
-import { useState, useEffect, useRef } from 'react';
+// Componente per l'anteprima del PDF
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useOS } from '../../../context/OSContext';
 
 const PDFPreview = ({ files, options, isLoading }) => {
   const { osType, isMobile } = useOS();
-  // Use PDFWebViewer for actual PDF rendering
-  if (files if (files if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { Array.isArray(files) if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { files.length > 0 if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { files[0] if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { !isLoading) {if (files && files.length > 0 && !isLoading) { Array.isArray(files) if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { files.length > 0 if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { files[0] if (files && files.length > 0 && !isLoading) {if (files && files.length > 0 && !isLoading) { !isLoading) {
-    return <PDFWebViewer file={files[0]} />;
-  }
   const [preview, setPreview] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [scale, setScale] = useState(1.0);
   const canvasRef = useRef(null);
   
-  // PDF.js check
-  useEffect(() => {
-    if (!window.pdfjsLib) {
-      console.error("PDF.js library not found. Make sure it's loaded in index.html");
-    }
+
   }, []);
   
-  // Load PDF preview when file changes
+  // Carica l'anteprima del PDF quando cambia il file o le opzioni
   useEffect(() => {
     if (!files || files.length === 0 || !window.pdfjsLib) return;
     
-    // Clear previous preview
+    // Cancella l'anteprima precedente
     if (preview) {
       preview.destroy();
       setPreview(null);
@@ -35,10 +26,10 @@ const PDFPreview = ({ files, options, isLoading }) => {
     
     const loadPdfPreview = async () => {
       try {
-        // Use the first file for preview
+        // Utilizziamo il primo file per l'anteprima
         const file = files[0];
         
-        // Read file as ArrayBuffer
+        // Leggi il file come ArrayBuffer
         const arrayBuffer = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => resolve(reader.result);
@@ -46,7 +37,7 @@ const PDFPreview = ({ files, options, isLoading }) => {
           reader.readAsArrayBuffer(file);
         });
         
-        // Load PDF with PDF.js
+        // Carica il PDF con PDF.js
         const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
         const pdfDocument = await loadingTask.promise;
         
@@ -55,7 +46,7 @@ const PDFPreview = ({ files, options, isLoading }) => {
         setCurrentPage(1);
         
       } catch (error) {
-        console.error('Error loading PDF preview:', error);
+        console.error('Errore durante il caricamento dell\'anteprima PDF:', error);
       }
     };
     
@@ -67,41 +58,24 @@ const PDFPreview = ({ files, options, isLoading }) => {
         preview.destroy();
       }
     };
-  }, [files, preview]);
+  }, [files]);
   
-  // Render current page
+  // Renderizza la pagina corrente
   useEffect(() => {
     if (!preview || !canvasRef.current) return;
     
-    const renderPage = async () => {
-      try {
-        // Get the page
-        const page = await preview.getPage(currentPage);
-        
-        // Calculate appropriate scale
-        const canvas = canvasRef.current;
-        const viewport = page.getViewport({ scale });
-        
-        // Set canvas dimensions
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        
-        // Render the page
-        const renderContext = {
-          canvasContext: canvas.getContext('2d'),
-          viewport: viewport
-        };
+
         
         await page.render(renderContext).promise;
       } catch (error) {
-        console.error('Error rendering PDF page:', error);
+        console.error('Errore durante il rendering della pagina PDF:', error);
       }
     };
     
     renderPage();
   }, [preview, currentPage, scale]);
   
-  // Change page
+  // Cambia pagina
   const changePage = (delta) => {
     const newPage = currentPage + delta;
     if (newPage >= 1 && newPage <= totalPages) {
@@ -109,13 +83,13 @@ const PDFPreview = ({ files, options, isLoading }) => {
     }
   };
   
-  // Change zoom
+  // Cambia zoom
   const changeZoom = (delta) => {
     const newScale = Math.max(0.5, Math.min(2.0, scale + delta));
     setScale(newScale);
   };
   
-  // Get preview style
+  // Rendering adattivo in base al dispositivo
   const getPreviewStyle = () => {
     return {
       maxHeight: isMobile ? '300px' : '400px',
@@ -128,35 +102,35 @@ const PDFPreview = ({ files, options, isLoading }) => {
     };
   };
   
-  // Animation variants
+  // Animazioni per il controllo pagine
   const controlsVariants = {
     hidden: { opacity: 0, y: 10 },
     visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
   };
   
-  // Render loading state
+  // Renderizza un messaggio di caricamento
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-64 bg-gray-100 dark:bg-gray-800 rounded-lg">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500 mb-4"></div>
-        <p className="text-gray-600 dark:text-gray-400">Loading preview...</p>
+        <p className="text-gray-600 dark:text-gray-400">Caricamento anteprima...</p>
       </div>
     );
   }
   
-  // Render message if no files
+  // Renderizza un messaggio se non ci sono file
   if (!files || files.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 bg-gray-100 dark:bg-gray-800 rounded-lg">
         <svg className="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <p className="text-gray-600 dark:text-gray-400">Upload a PDF file to see preview</p>
+        <p className="text-gray-600 dark:text-gray-400">Carica un file PDF per visualizzare l'anteprima</p>
       </div>
     );
   }
   
-  // Render PDF
+  // Renderizza il PDF
   return (
     <div>
       <div className="flex justify-center mb-3">
@@ -212,7 +186,7 @@ const PDFPreview = ({ files, options, isLoading }) => {
           </button>
           
           <span className="mx-3 text-sm">
-            Page {currentPage} of {totalPages}
+            Pagina {currentPage} di {totalPages}
           </span>
           
           <button
@@ -231,3 +205,40 @@ const PDFPreview = ({ files, options, isLoading }) => {
 };
 
 export default PDFPreview;
+  // PDF.js is now pre-loaded in index.html
+  // Check if it's available
+  useEffect(() => {
+    if (!window.pdfjsLib) {
+      console.error("PDF.js library not found. Check if it's properly loaded in index.html");
+    }
+  }, []);
+      const renderPage = async () => {
+        try {
+          // Get the page
+          const page = await preview.getPage(currentPage);
+          
+          // Calculate an appropriate scale to fit the container
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          
+          const viewport = page.getViewport({ scale });
+          
+          // Set the canvas dimensions
+          canvas.height = viewport.height;
+          canvas.width = viewport.width;
+          
+          // Get canvas context
+          const context = canvas.getContext("2d");
+          if (!context) return;
+          
+          // Render the page
+          const renderContext = {
+            canvasContext: context,
+            viewport: viewport
+          };
+          
+          await page.render(renderContext).promise;
+        } catch (error) {
+          console.error("Errore durante il rendering della pagina PDF:", error);
+        }
+      };
