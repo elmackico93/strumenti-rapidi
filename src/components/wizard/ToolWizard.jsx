@@ -48,14 +48,14 @@ const ToolWizard = ({ title, description, steps, toolId, themeColor }) => {
   // Get step names for the indicator
   const stepNames = steps.map(step => step.title);
   
-  // Animazione in base al sistema operativo
+  // Animation based on operating system
   const getAnimationVariants = () => {
-    // Animazioni più fluide per iOS e macOS, più funzionali per altri OS
+    // More fluid animations for iOS and macOS, more functional for other OS
     if (osType === 'ios' || osType === 'macos') {
       return {
         initial: { opacity: 0, x: 20, scale: 0.95 },
         animate: { opacity: 1, x: 0, scale: 1 },
-        exit: { opacity: 0, x: -20, scale: 0.95 },
+exit: { opacity: 0, x: -20, scale: 0.95 },
         transition: { type: "spring", stiffness: 300, damping: 30 }
       };
     } else {
@@ -69,6 +69,14 @@ const ToolWizard = ({ title, description, steps, toolId, themeColor }) => {
   };
   
   const animationVariants = getAnimationVariants();
+  
+  // Handle wizard completion (force next step to work)
+  const forceComplete = () => {
+    if (currentStep === steps.length - 2) { // If on the second-to-last step
+      setCurrentStep(steps.length - 1); // Force to last step
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -102,7 +110,8 @@ const ToolWizard = ({ title, description, steps, toolId, themeColor }) => {
               result: result,
               setResult: setProcessResult,
               toolId,
-              themeColor
+              themeColor,
+              forceComplete
             })}
           </motion.div>
         </AnimatePresence>

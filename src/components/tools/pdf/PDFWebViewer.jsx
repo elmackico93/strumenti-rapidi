@@ -38,6 +38,8 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
             });
             
             const pdf = await loadingTask.promise;
+            
+            // Set document and update page count
             setPdfDoc(pdf);
             setNumPages(pdf.numPages);
             setCurrentPage(1);
@@ -100,13 +102,13 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
         canvas.height = viewport.height;
         canvas.width = viewport.width;
         
+        // Clear canvas before rendering
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        
         const renderContext = {
           canvasContext: context,
           viewport: viewport
         };
-        
-        // Clear canvas before rendering
-        context.clearRect(0, 0, canvas.width, canvas.height);
         
         const task = page.render(renderContext);
         setRenderTask(task);

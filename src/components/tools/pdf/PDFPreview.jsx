@@ -14,7 +14,7 @@ const PDFPreview = ({ files, options, isLoading }) => {
   
   const [preview, setPreview] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
   const [scale, setScale] = useState(1.0);
   const canvasRef = useRef(null);
   const [renderTask, setRenderTask] = useState(null);
@@ -227,38 +227,36 @@ const PDFPreview = ({ files, options, isLoading }) => {
         <canvas ref={canvasRef} className="shadow-md"></canvas>
       </div>
       
-      {totalPages > 1 && (
-        <motion.div
-          className="flex justify-center items-center mt-3"
-          variants={controlsVariants}
-          initial="hidden"
-          animate="visible"
+      <motion.div
+        className="flex justify-center items-center mt-3"
+        variants={controlsVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <button
+          className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none disabled:opacity-50"
+          onClick={() => changePage(-1)}
+          disabled={currentPage <= 1}
         >
-          <button
-            className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none disabled:opacity-50"
-            onClick={() => changePage(-1)}
-            disabled={currentPage <= 1}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          
-          <span className="mx-3 text-sm">
-            Page {currentPage} of {totalPages}
-          </span>
-          
-          <button
-            className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none disabled:opacity-50"
-            onClick={() => changePage(1)}
-            disabled={currentPage >= totalPages}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-          </button>
-        </motion.div>
-      )}
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        
+        <span className="mx-3 text-sm">
+          Page {currentPage} of {totalPages || "?"}
+        </span>
+        
+        <button
+          className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none disabled:opacity-50"
+          onClick={() => changePage(1)}
+          disabled={currentPage >= totalPages}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      </motion.div>
     </div>
   );
 };

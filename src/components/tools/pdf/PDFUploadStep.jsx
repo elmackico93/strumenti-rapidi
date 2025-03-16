@@ -28,10 +28,55 @@ const PDFUploadStep = ({ data, updateData, goNext, toolId, themeColor, conversio
       setFiles(data.files);
     }
     
+    if (data.fileInfo) {
+      setFileInfo(data.fileInfo);
+    }
+    
     if (data.conversionType) {
       onConversionTypeChange(data.conversionType);
     }
   }, [data, onConversionTypeChange]);
+  
+  // Analyze a PDF file to get its page count
+  const analyzePDF = async (file) => {
+    return new Promise((resolve, reject) => {
+      try {
+        // Use PDF.js to analyze the PDF
+        const reader = new FileReader();
+        reader.onload = async function(event) {
+          try {
+            const typedArray = new Uint8Array(event.target.result);
+            const loadingTask = window.pdfjsLib.getDocument(typedArray);
+            const pdf = await loadingTask.promise;
+            const numPages = pdf.numPages;
+            
+            resolve({
+              name: file.name,
+              size: file.size,
+              pages: numPages,
+              format: 'PDF'
+            });
+          } catch (err) {
+            console.error('Error analyzing PDF with PDF.js:', err);
+            // Fallback to a default page count
+            resolve({
+              name: file.name,
+              size: file.size,
+              pages: 1, // Default fallback
+              format: 'PDF'
+            });
+          }
+        };
+        reader.onerror = () => {
+          reject(new Error('Could not read the file'));
+        };
+        reader.readAsArrayBuffer(file);
+      } catch (err) {
+        console.error('Error in analyzePDF:', err);
+        reject(err);
+      }
+    });
+  };
   
   // Gestisci il caricamento dei file
   const handleFileChange = async (selectedFiles) => {
@@ -58,21 +103,17 @@ const PDFUploadStep = ({ data, updateData, goNext, toolId, themeColor, conversio
       setFiles([fileArray[0]]);
     }
     
-    // Analisi del file (semplificata)
+    // Analisi del file
     setIsAnalyzing(true);
     
     try {
-      setTimeout(() => {
-        const fileInfos = fileArray.map(file => ({
-          name: file.name,
-          size: file.size,
-          pages: Math.floor(Math.random() * 20) + 1, // Simulazione
-          format: 'PDF'
-        }));
-        
-        setFileInfo(fileInfos);
-        setIsAnalyzing(false);
-      }, 500);
+      // Analyze each PDF file to get page count
+      const fileInfos = await Promise.all(
+        fileArray.map(file => analyzePDF(file))
+      );
+      
+      setFileInfo(fileInfos);
+      setIsAnalyzing(false);
     } catch (err) {
       console.error('Errore durante l\'analisi del PDF:', err);
       setError('Impossibile analizzare il file PDF.');

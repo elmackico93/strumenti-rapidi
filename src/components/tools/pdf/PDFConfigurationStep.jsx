@@ -8,7 +8,7 @@ import AdaptiveSwitch from '../../ui/AdaptiveSwitch';
 import PDFPreview from './PDFPreview';
 import { useOS } from '../../../context/OSContext';
 
-const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, conversionType }) => {
+const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, conversionType, forceComplete }) => {
   const { osType, isMobile } = useOS();
   const [isGeneratingPreview, setIsGeneratingPreview] = useState(false);
   const [options, setOptions] = useState({
@@ -93,8 +93,14 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
       return;
     }
     
-    updateData({ options });
-    goNext();
+    updateData({ options: {...options, operation: options.operation || data.conversionType} });
+    
+    // Use forceComplete to ensure progression to the result step
+    if (typeof forceComplete === 'function') {
+      forceComplete();
+    } else {
+      goNext();
+    }
   };
   
   // Renderizza le opzioni di conversione
@@ -332,7 +338,9 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
   
   // Determina le opzioni da mostrare in base al tipo di operazione
   const renderOptionsBasedOnOperation = () => {
-    switch (options.operation) {
+    const operation = options.operation || data.conversionType || 'convert';
+    
+    switch (operation) {
       case 'convert':
         return renderConversionOptions();
       case 'compress':
@@ -350,7 +358,9 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
   
   // Ottieni il titolo appropriato per il tipo di operazione
   const getOperationTitle = () => {
-    switch (options.operation) {
+    const operation = options.operation || data.conversionType || 'convert';
+    
+    switch (operation) {
       case 'convert':
         return 'Opzioni di conversione';
       case 'compress':
@@ -426,7 +436,7 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
               <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
                 <h4 className="font-medium text-sm mb-1">Riepilogo</h4>
                 <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                  {options.operation === 'convert' && (
+                  {options.operation === 'convert' || (!options.operation && data.conversionType === 'convert') && (
                     <>
                       <li>• Conversione da PDF a {options.targetFormat.toUpperCase()}</li>
                       <li>• Qualità: {options.quality}</li>
@@ -437,7 +447,7 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
                     </>
                   )}
                   
-                  {options.operation === 'compress' && (
+                  {options.operation === 'compress' || (!options.operation && data.conversionType === 'compress') && (
                     <>
                       <li>• Compressione PDF</li>
                       <li>• Livello: {options.quality === 'low' ? 'Massimo' : options.quality === 'medium' ? 'Medio' : 'Lieve'}</li>
@@ -445,7 +455,7 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
                     </>
                   )}
                   
-                  {options.operation === 'protect' && (
+                  {options.operation === 'protect' || (!options.operation && data.conversionType === 'protect') && (
                     <>
                       <li>• Protezione con password</li>
                       <li>• Stampa: {options.permissions.printing ? 'Consentita' : 'Non consentita'}</li>
@@ -454,7 +464,7 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
                     </>
                   )}
                   
-                  {options.operation === 'split' && (
+                  {options.operation === 'split' || (!options.operation && data.conversionType === 'split') && (
                     <>
                       <li>• Divisione PDF</li>
                       <li>• Modalità: {options.pageRange === 'all' ? 'Una pagina per file' : 'Intervalli personalizzati'}</li>
@@ -464,7 +474,7 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
                     </>
                   )}
                   
-                  {options.operation === 'merge' && (
+                  {options.operation === 'merge' || (!options.operation && data.conversionType === 'merge') && (
                     <>
                       <li>• Unione PDF</li>
                       <li>• File da unire: {data.files ? data.files.length : 0}</li>
