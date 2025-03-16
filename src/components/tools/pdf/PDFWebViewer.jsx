@@ -8,6 +8,7 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
   const [pdfDoc, setPdfDoc] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [renderTask, setRenderTask] = useState(null);
 
   // Load PDF
   useEffect(() => {
@@ -26,6 +27,11 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
         
         fileReader.onload = async (event) => {
           try {
+            // Clean up previous PDF document
+            if (pdfDoc) {
+              pdfDoc.destroy();
+            }
+            
             // Load PDF document
             const loadingTask = window.pdfjsLib.getDocument({
               data: new Uint8Array(event.target.result)
@@ -61,6 +67,12 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
     
     // Cleanup
     return () => {
+      // Cancel any pending render task
+      if (renderTask) {
+        renderTask.cancel();
+      }
+      
+      // Cleanup PDF document
       if (pdfDoc) {
         pdfDoc.destroy();
       }
@@ -73,6 +85,12 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
     
     const renderPage = async () => {
       try {
+        // Cancel any existing render task
+        if (renderTask) {
+          renderTask.cancel();
+          setRenderTask(null);
+        }
+        
         const page = await pdfDoc.getPage(currentPage);
         const viewport = page.getViewport({ scale });
         
@@ -87,14 +105,33 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
           viewport: viewport
         };
         
-        await page.render(renderContext).promise;
+        // Clear canvas before rendering
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        
+        const task = page.render(renderContext);
+        setRenderTask(task);
+        
+        await task.promise;
+        setRenderTask(null);
       } catch (err) {
-        console.error("Error rendering page:", err);
-        setError("Error rendering page");
+        if (err.name === 'RenderingCancelledException') {
+          console.log('Rendering was cancelled');
+        } else {
+          console.error("Error rendering page:", err);
+          setError("Error rendering page");
+        }
       }
     };
     
     renderPage();
+    
+    // Cleanup function
+    return () => {
+      if (renderTask) {
+        renderTask.cancel();
+        setRenderTask(null);
+      }
+    };
   }, [pdfDoc, currentPage, scale]);
 
   // Change page

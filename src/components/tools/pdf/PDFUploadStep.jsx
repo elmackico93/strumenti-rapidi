@@ -37,8 +37,11 @@ const PDFUploadStep = ({ data, updateData, goNext, toolId, themeColor, conversio
   const handleFileChange = async (selectedFiles) => {
     setError(null);
     
+    // Convert single file to array if needed
+    const fileArray = Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles];
+    
     // Verifica se sono PDF
-    const nonPdfFiles = Array.from(selectedFiles).filter(file => 
+    const nonPdfFiles = fileArray.filter(file => 
       file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')
     );
     
@@ -49,10 +52,10 @@ const PDFUploadStep = ({ data, updateData, goNext, toolId, themeColor, conversio
     
     // Per l'unione, accetta più file
     if (conversionType === 'merge') {
-      setFiles(prevFiles => [...prevFiles, ...selectedFiles]);
+      setFiles(prevFiles => [...prevFiles, ...fileArray]);
     } else {
       // Per altre operazioni, usa solo il primo file
-      setFiles([selectedFiles[0]]);
+      setFiles([fileArray[0]]);
     }
     
     // Analisi del file (semplificata)
@@ -60,7 +63,7 @@ const PDFUploadStep = ({ data, updateData, goNext, toolId, themeColor, conversio
     
     try {
       setTimeout(() => {
-        const fileInfos = Array.from(selectedFiles).map(file => ({
+        const fileInfos = fileArray.map(file => ({
           name: file.name,
           size: file.size,
           pages: Math.floor(Math.random() * 20) + 1, // Simulazione
@@ -233,7 +236,7 @@ const PDFUploadStep = ({ data, updateData, goNext, toolId, themeColor, conversio
                     accept=".pdf"
                     multiple
                     className="hidden"
-                    onChange={(e) => handleFileChange(e.target.files)}
+                    onChange={(e) => handleFileChange(Array.from(e.target.files))}
                   />
                 </motion.div>
               )}

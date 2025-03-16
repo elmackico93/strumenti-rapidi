@@ -1,7 +1,7 @@
 // src/components/ui/FileDropZone.jsx
 import { useState, useRef } from 'react';
 
-const FileDropZone = ({ onFileSelect, acceptedFormats, maxSize, icon: Icon }) => {
+const FileDropZone = ({ onFileSelect, acceptedFormats, maxSize, multiple, icon: Icon }) => {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
   
@@ -43,7 +43,11 @@ const FileDropZone = ({ onFileSelect, acceptedFormats, maxSize, icon: Icon }) =>
     
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleFile(files[0]);
+      if (multiple) {
+        handleFiles(Array.from(files));
+      } else {
+        handleFile(files[0]);
+      }
     }
   };
   
@@ -51,7 +55,11 @@ const FileDropZone = ({ onFileSelect, acceptedFormats, maxSize, icon: Icon }) =>
   const handleFileSelect = (e) => {
     const files = e.target.files;
     if (files.length > 0) {
-      handleFile(files[0]);
+      if (multiple) {
+        handleFiles(Array.from(files));
+      } else {
+        handleFile(files[0]);
+      }
     }
   };
   
@@ -60,7 +68,35 @@ const FileDropZone = ({ onFileSelect, acceptedFormats, maxSize, icon: Icon }) =>
     fileInputRef.current.click();
   };
   
-  // Validate and process the file
+  // Validate and process multiple files
+  const handleFiles = (files) => {
+    const validFiles = files.filter(file => {
+      // Check file type if acceptedFormats provided
+      if (acceptedFormats && acceptedFormats.length > 0) {
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+        if (!acceptedFormats.includes(fileExtension)) {
+          return false;
+        }
+      }
+      
+      // Check file size if maxSize provided
+      if (maxSize && file.size > maxSize) {
+        return false;
+      }
+      
+      return true;
+    });
+    
+    if (validFiles.length === 0) {
+      alert(`Invalid file format or size. Please upload files with one of these formats: ${acceptedFormats.join(', ')} and maximum size ${formatFileSize(maxSize)}`);
+      return;
+    }
+    
+    // Pass the files to parent component
+    onFileSelect(validFiles);
+  };
+  
+  // Validate and process a single file
   const handleFile = (file) => {
     // Check file type if acceptedFormats provided
     if (acceptedFormats && acceptedFormats.length > 0) {
@@ -85,7 +121,7 @@ const FileDropZone = ({ onFileSelect, acceptedFormats, maxSize, icon: Icon }) =>
     <div 
       className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors duration-300 ${
         isDragging ? 'border-primary-500 bg-primary-50 dark:bg-primary-900 dark:bg-opacity-20' : 'border-gray-300 dark:border-gray-700'
-      }`}
+        }`}
       style={{ 
         transform: isDragging ? 'scale(1.01)' : 'scale(1)',
         transition: 'transform 0.3s, border-color 0.3s, background-color 0.3s'
@@ -101,6 +137,7 @@ const FileDropZone = ({ onFileSelect, acceptedFormats, maxSize, icon: Icon }) =>
         ref={fileInputRef}
         onChange={handleFileSelect} 
         accept={acceptedFormats?.join(',')}
+        multiple={multiple}
         className="hidden"
       />
       
