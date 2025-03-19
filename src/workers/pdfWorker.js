@@ -1,21 +1,36 @@
-// Production-ready PDF Worker with comprehensive implementation of all PDF operations
-// This worker handles PDF processing using PDF.js, pdf-lib, and other libraries
+// StrumentiRapidi.it PDF Worker Module
+// Fixed implementation using classic worker mode with importScripts
 
-// Import PDF.js for PDF rendering and processing
+// StrumentiRapidi.it PDF Worker Module
+// Fixed implementation using classic worker mode with importScripts
+
+// This worker is intentionally NOT a module to allow importScripts usage
+// Load required libraries
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js');
-
-// Import pdf-lib for PDF manipulation
 importScripts('https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js');
 
-// Import JSZip for handling ZIP files
-importScripts('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
-
-// Set up PDF.js worker
+// Initialize PDF.js
+var pdfjsLib = self.pdfjsLib;
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// Reference to global PDF libraries
-const { PDFDocument, StandardFonts, rgb, degrees, PageSizes } = PDFLib;
+// Get PDF-lib references
+var PDFLib = self.PDFLib;
+var PDFDocument = PDFLib.PDFDocument;
+var StandardFonts = PDFLib.StandardFonts;
+var rgb = PDFLib.rgb;
+
+// Set up error handling
+self.onerror = function(message, source, lineno, colno, error) {
+  console.error('Worker error:', message, 'at', source, lineno, colno, error);
+  self.postMessage({
+    status: 'error',
+    error: message,
+    source: source,
+    lineno: lineno
+  });
+  return true; // Prevent default handling
+};
 
 // Listen for messages from the main thread
 self.onmessage = async function(e) {
@@ -61,6 +76,7 @@ self.onmessage = async function(e) {
       result
     });
   } catch (error) {
+    // Log error details
     console.error(`Worker error in task ${task}:`, error);
     
     // Send error back to main thread
@@ -73,20 +89,13 @@ self.onmessage = async function(e) {
 };
 
 /**
- * Converts PDF pages to images with high-quality rendering
- * @param {ArrayBuffer} fileData - The PDF file data
- * @param {Object} options - Conversion options
- * @returns {Object} Result containing image data
+ * Converts PDF pages to images
  */
 async function handleConvertToImages(fileData, options) {
   // Load the PDF document
   const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileData) });
   const pdfDocument = await loadingTask.promise;
   const numPages = pdfDocument.numPages;
-  
-  // Set up an OffscreenCanvas for rendering
-  const canvas = new OffscreenCanvas(1, 1);
-  const ctx = canvas.getContext('2d', { alpha: false });
   
   // Get format and quality settings
   const format = options.format || 'png';
@@ -97,112 +106,58 @@ async function handleConvertToImages(fileData, options) {
   const dpi = parseInt(options.dpi) || 150;
   const scale = dpi / 72; // PDF points to pixels conversion
   
-  // Determine pages to process
-  let pagesToRender = [];
-  if (options.pageRange === 'custom' && options.customPages) {
-    // Parse page ranges (e.g., "1-5,8,11-13")
-    const rangeStr = options.customPages.trim();
-    const ranges = rangeStr.split(',');
-    
-    for (const range of ranges) {
-      const trimmedRange = range.trim();
-      if (trimmedRange.includes('-')) {
-        const [startStr, endStr] = trimmedRange.split('-');
-        const start = parseInt(startStr.trim());
-        const end = parseInt(endStr.trim());
-        
-        if (!isNaN(start) && !isNaN(end) && start > 0 && end <= numPages) {
-          for (let i = start; i <= end; i++) {
-            if (!pagesToRender.includes(i)) {
-              pagesToRender.push(i);
-            }
-          }
-        }
-      } else {
-        const pageNum = parseInt(trimmedRange);
-        if (!isNaN(pageNum) && pageNum > 0 && pageNum <= numPages && !pagesToRender.includes(pageNum)) {
-          pagesToRender.push(pageNum);
-        }
-      }
-    }
-    
-    // Sort page numbers
-    pagesToRender.sort((a, b) => a - b);
-  } else {
-    // All pages
-    pagesToRender = Array.from({ length: numPages }, (_, i) => i + 1);
-  }
+  // Process pages
+  const pagesToProcess = options.pageRange === 'custom' && options.customPages 
+    ? parsePageRanges(options.customPages, numPages)
+    : Array.from({ length: numPages }, (_, i) => i + 1);
   
-  // Prepare progress reporting
-  const totalPages = pagesToRender.length;
-  let processedPages = 0;
+  // Create a canvas for rendering
+  const canvas = new OffscreenCanvas(1, 1);
+  const ctx = canvas.getContext('2d');
   
   // Process each page
   const images = [];
-  for (const pageNum of pagesToRender) {
-    // Get the page
-    const page = await pdfDocument.getPage(pageNum);
-    
-    // Get the viewport at the desired scale
-    const viewport = page.getViewport({ scale });
-    
-    // Set canvas dimensions to match the viewport
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    
-    // Prepare render context
-    const renderContext = {
-      canvasContext: ctx,
-      viewport: viewport,
-      enableWebGL: true,
-      renderInteractiveForms: true,
-      textLayer: false,
-      annotationMode: 0
-    };
-    
-    // Render the page to canvas
-    await page.render(renderContext).promise;
-    
-    // Convert to the desired image format
-    let dataUrl;
-    let mimeType;
-    
-    if (format === 'jpg' || format === 'jpeg') {
-      mimeType = 'image/jpeg';
-      dataUrl = canvas.toDataURL(mimeType, quality);
-    } else if (format === 'png') {
-      mimeType = 'image/png';
-      dataUrl = canvas.toDataURL(mimeType);
-    } else if (format === 'webp' && canvas.toDataURL('image/webp') !== canvas.toDataURL()) {
-      // Check if webp is supported
-      mimeType = 'image/webp';
-      dataUrl = canvas.toDataURL(mimeType, quality);
-    } else {
-      // Default to PNG if format is not supported
-      mimeType = 'image/png';
-      dataUrl = canvas.toDataURL(mimeType);
+  for (const pageNum of pagesToProcess) {
+    try {
+      // Get the page
+      const page = await pdfDocument.getPage(pageNum);
+      
+      // Get the viewport at the desired scale
+      const viewport = page.getViewport({ scale });
+      
+      // Set canvas dimensions
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
+      
+      // Render the page
+      const renderContext = {
+        canvasContext: ctx,
+        viewport: viewport
+      };
+      
+      // Wait for rendering to complete
+      await page.render(renderContext).promise;
+      
+      // Convert to data URL with the desired format
+      let dataUrl;
+      if (format === 'jpg' || format === 'jpeg') {
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      } else {
+        dataUrl = canvas.toDataURL('image/png');
+      }
+      
+      // Add to the results array
+      images.push({
+        pageNumber: pageNum,
+        width: canvas.width,
+        height: canvas.height,
+        dataUrl: dataUrl,
+        size: Math.round(dataUrl.length * 0.75) // Estimate size
+      });
+    } catch (error) {
+      console.error(`Error processing page ${pageNum}:`, error);
     }
-    
-    // Calculate approximate size (data URL length * 0.75 is a good estimate)
-    const size = Math.round(dataUrl.length * 0.75);
-    
-    // Add to the results array
-    images.push({
-      pageNumber: pageNum,
-      width: canvas.width,
-      height: canvas.height,
-      dataUrl,
-      size,
-      mimeType
-    });
-    
-    // Update progress
-    processedPages++;
   }
-  
-  // Clean up
-  page?.cleanup?.();
-  pdfDocument?.cleanup?.();
   
   return {
     success: true,
@@ -214,508 +169,393 @@ async function handleConvertToImages(fileData, options) {
 }
 
 /**
- * Extracts text content from PDF pages with advanced formatting options
- * @param {ArrayBuffer} fileData - The PDF file data
- * @param {Object} options - Extraction options
- * @returns {Object} Result containing extracted text
+ * Parses page ranges like "1-5,8,11-13" into an array of page numbers
  */
-async function handleExtractText(fileData, options) {
-  // Load the PDF document
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileData) });
-  const pdfDocument = await loadingTask.promise;
-  const numPages = pdfDocument.numPages;
+function parsePageRanges(rangeStr, totalPages) {
+  const result = [];
+  const ranges = rangeStr.split(',');
   
-  // Determine which pages to extract
-  let pagesToExtract = [];
-  if (options.pageRange === 'custom' && options.customPages) {
-    // Parse page ranges (e.g., "1-5,8,11-13")
-    const rangeStr = options.customPages.trim();
-    const ranges = rangeStr.split(',');
-    
-    for (const range of ranges) {
-      const trimmedRange = range.trim();
-      if (trimmedRange.includes('-')) {
-        const [startStr, endStr] = trimmedRange.split('-');
-        const start = parseInt(startStr.trim());
-        const end = parseInt(endStr.trim());
-        
-        if (!isNaN(start) && !isNaN(end) && start > 0 && end <= numPages) {
-          for (let i = start; i <= end; i++) {
-            if (!pagesToExtract.includes(i)) {
-              pagesToExtract.push(i);
-            }
+  for (const range of ranges) {
+    const trimmed = range.trim();
+    if (trimmed.includes('-')) {
+      const [startStr, endStr] = trimmed.split('-');
+      const start = parseInt(startStr.trim());
+      const end = parseInt(endStr.trim());
+      
+      if (!isNaN(start) && !isNaN(end) && start > 0 && end <= totalPages) {
+        for (let i = start; i <= end; i++) {
+          if (!result.includes(i)) {
+            result.push(i);
           }
         }
-      } else {
-        const pageNum = parseInt(trimmedRange);
-        if (!isNaN(pageNum) && pageNum > 0 && pageNum <= numPages && !pagesToExtract.includes(pageNum)) {
-          pagesToExtract.push(pageNum);
-        }
-      }
-    }
-    
-    // Sort page numbers
-    pagesToExtract.sort((a, b) => a - b);
-  } else {
-    // All pages
-    pagesToExtract = Array.from({ length: numPages }, (_, i) => i + 1);
-  }
-  
-  // Extract text from selected pages
-  const pages = [];
-  let fullText = '';
-  
-  // Configuration for text extraction
-  const preserveFormatting = options.preserveFormatting !== false;
-  const preserveLinks = options.preserveLinks !== false;
-  
-  // Process each page
-  for (const pageNum of pagesToExtract) {
-    const page = await pdfDocument.getPage(pageNum);
-    
-    // Get text content with proper parameters
-    const textContent = await page.getTextContent({
-      normalizeWhitespace: !preserveFormatting,
-      disableCombineTextItems: preserveFormatting
-    });
-    
-    // Get annotations if we want to preserve links
-    let annotations = [];
-    if (preserveLinks) {
-      try {
-        annotations = await page.getAnnotations();
-      } catch (error) {
-        console.warn('Failed to get annotations:', error);
-      }
-    }
-    
-    // Process text items to preserve layout
-    let pageText = '';
-    let lastY;
-    let lastX;
-    
-    // Track links
-    const links = annotations
-      .filter(a => a.subtype === 'Link' && a.url)
-      .map(a => ({
-        rect: a.rect,
-        url: a.url
-      }));
-    
-    // Process text with formatting
-    if (preserveFormatting) {
-      // More sophisticated text extraction with layout preservation
-      const lines = [];
-      let currentLine = [];
-      
-      for (const item of textContent.items) {
-        if (lastY !== undefined && Math.abs(lastY - item.transform[5]) > 5) {
-          // New line detected
-          if (currentLine.length > 0) {
-            lines.push(currentLine);
-            currentLine = [];
-          }
-        }
-        
-        // Add the item to the current line
-        currentLine.push(item);
-        lastY = item.transform[5];
-      }
-      
-      // Add the last line if not empty
-      if (currentLine.length > 0) {
-        lines.push(currentLine);
-      }
-      
-      // Convert lines to text
-      for (const line of lines) {
-        // Sort items by x position
-        line.sort((a, b) => a.transform[4] - b.transform[4]);
-        
-        const lineText = line.map(item => item.str).join('');
-        pageText += lineText + '\n';
       }
     } else {
-      // Simple text extraction
-      pageText = textContent.items
-        .map(item => item.str)
-        .join(' ')
-        .replace(/\s+/g, ' ');
+      const pageNum = parseInt(trimmed);
+      if (!isNaN(pageNum) && pageNum > 0 && pageNum <= totalPages && !result.includes(pageNum)) {
+        result.push(pageNum);
+      }
     }
-    
-    // Add link information if needed
-    const pageData = {
-      pageNumber: pageNum,
-      text: pageText.trim()
-    };
-    
-    if (preserveLinks && links.length > 0) {
-      pageData.links = links;
-    }
-    
-    pages.push(pageData);
-    fullText += pageData.text + '\n\n';
   }
   
-  return {
-    success: true,
-    pages,
-    fullText: fullText.trim(),
-    totalPages: numPages,
-    extractedPages: pages.length
-  };
+  return result.sort((a, b) => a - b);
 }
 
 /**
- * Compresses a PDF document with various optimization techniques
- * @param {ArrayBuffer} fileData - The PDF file data
- * @param {Object} options - Compression options
- * @returns {Object} Result containing compressed PDF data
+ * Extracts text content from PDF
+ */
+async function handleExtractText(fileData, options) {
+  try {
+    // Load the PDF document
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileData) });
+    const pdfDocument = await loadingTask.promise;
+    const numPages = pdfDocument.numPages;
+    
+    // Determine which pages to extract
+    let pagesToExtract = [];
+    if (options.pageRange === 'custom' && options.customPages) {
+      pagesToExtract = parsePageRanges(options.customPages, numPages);
+    } else {
+      // All pages
+      pagesToExtract = Array.from({ length: numPages }, (_, i) => i + 1);
+    }
+    
+    // Extract text from selected pages
+    const pages = [];
+    let fullText = '';
+    
+    // Configuration for text extraction
+    const preserveFormatting = options.preserveFormatting !== false;
+    
+    // Process each page
+    for (const pageNum of pagesToExtract) {
+      try {
+        const page = await pdfDocument.getPage(pageNum);
+        
+        // Get text content with proper parameters
+        const textContent = await page.getTextContent({
+          normalizeWhitespace: !preserveFormatting,
+          disableCombineTextItems: preserveFormatting
+        });
+        
+        // Process text items
+        let pageText = '';
+        
+        if (preserveFormatting) {
+          // More sophisticated text extraction with layout preservation
+          const items = textContent.items;
+          const lastY = {};
+          
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const str = item.str;
+            const x = item.transform[4];
+            const y = item.transform[5];
+            
+            if (lastY[y] !== undefined) {
+              // Same line
+              pageText += str;
+            } else {
+              // New line
+              if (i > 0) pageText += '\n';
+              pageText += str;
+            }
+            
+            lastY[y] = x + item.width;
+          }
+        } else {
+          // Simple text extraction
+          pageText = textContent.items
+            .map(item => item.str)
+            .join(' ')
+            .replace(/\s+/g, ' ');
+        }
+        
+        // Add page info
+        pages.push({
+          pageNumber: pageNum,
+          text: pageText.trim()
+        });
+        
+        fullText += pageText.trim() + '\n\n';
+      } catch (error) {
+        console.error(`Error extracting text from page ${pageNum}:`, error);
+      }
+    }
+    
+    return {
+      success: true,
+      pages,
+      fullText: fullText.trim(),
+      totalPages: numPages,
+      extractedPages: pages.length
+    };
+  } catch (error) {
+    console.error('Error in text extraction:', error);
+    throw error;
+  }
+}
+
+/**
+ * Compresses a PDF document
  */
 async function handleCompressPDF(fileData, options) {
-  // Get original size
-  const originalSize = fileData.byteLength;
-  
-  // Measure original PDF properties
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileData) });
-  const pdfDoc = await loadingTask.promise;
-  const numPages = pdfDoc.numPages;
-  
-  // Create a new PDF document with pdf-lib
-  const pdfBytes = new Uint8Array(fileData);
-  const sourcePdfDoc = await PDFDocument.load(pdfBytes);
-  
-  // Create a new document for the compressed version
-  const newPdfDoc = await PDFDocument.create();
-  
-  // Determine compression parameters based on quality option
-  let imageQuality, compressLevel;
-  switch (options.quality) {
-    case 'low': // Maximum compression
-      imageQuality = 0.5;
-      compressLevel = 'high';
-      break;
-    case 'medium': // Balanced compression
-      imageQuality = 0.7;
-      compressLevel = 'medium';
-      break;
-    case 'high': // Light compression
-    default:
-      imageQuality = 0.9;
-      compressLevel = 'low';
-  }
-  
-  // Set up an OffscreenCanvas for rendering
-  const canvas = new OffscreenCanvas(1, 1);
-  const ctx = canvas.getContext('2d', { alpha: false });
-  
-  // Process each page
-  for (let i = 0; i < numPages; i++) {
-    // Get the page from the original document
-    const [newPage] = await newPdfDoc.copyPages(sourcePdfDoc, [i]);
+  try {
+    // Get original size
+    const originalSize = fileData.byteLength;
     
-    // Add the page to the new document
-    newPdfDoc.addPage(newPage);
+    // Create a new PDF document
+    const pdfBytes = new Uint8Array(fileData);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
     
-    // For high compression, render and replace images
-    if (compressLevel === 'high' || compressLevel === 'medium') {
-      // For full implementation, we would extract and compress each image 
-      // on the page and replace it in the PDF
-      
-      // Get the original page for rendering
-      const originalPage = await pdfDoc.getPage(i + 1);
-      const viewport = originalPage.getViewport({ scale: 1.0 });
-      
-      // Adjust scale based on compression level 
-      const scale = compressLevel === 'high' ? 0.8 : 0.9;
-      
-      // Render the page at reduced quality
-      canvas.width = Math.floor(viewport.width * scale);
-      canvas.height = Math.floor(viewport.height * scale);
-      
-      await originalPage.render({
-        canvasContext: ctx, 
-        viewport: originalPage.getViewport({ scale })
-      }).promise;
-      
-      // The image compression would continue here in a full implementation
-      // This would involve extracting images from the PDF and replacing with
-      // compressed versions using pdf-lib
+    // Save with compression options
+    let compressedPdfBytes;
+    
+    // Adjust compression level based on quality setting
+    if (options.quality === 'low') {
+      // Maximum compression
+      compressedPdfBytes = await pdfDoc.save({
+        useObjectStreams: true,
+        addDefaultPage: false,
+        updateFieldAppearances: false
+      });
+    } else if (options.quality === 'medium') {
+      // Balanced compression
+      compressedPdfBytes = await pdfDoc.save({
+        useObjectStreams: true,
+        addDefaultPage: false
+      });
+    } else {
+      // Light compression
+      compressedPdfBytes = await pdfDoc.save();
     }
+    
+    // Calculate compression results
+    const compressedSize = compressedPdfBytes.length;
+    const compressionRate = Math.round((1 - (compressedSize / originalSize)) * 100);
+    
+    return {
+      success: true,
+      data: compressedPdfBytes.buffer,
+      originalSize,
+      compressedSize,
+      compressionRate: Math.max(0, compressionRate) // Ensure non-negative
+    };
+  } catch (error) {
+    console.error('Error in PDF compression:', error);
+    throw error;
   }
-  
-  // Set PDF metadata compression options
-  const pdfMetadata = {
-    // These options help reduce file size
-    // Keep links, acroForm fields, and more but optimize
-    allowDataUrl: true,
-    objectCompressionType: 'deflate',
-    updateFieldAppearances: false
-  };
-  
-  // Compress and save the PDF
-  const compressedPdfBytes = await newPdfDoc.save(pdfMetadata);
-  const compressedSize = compressedPdfBytes.length;
-  
-  // Calculate compression rate
-  const compressionRate = Math.round((1 - (compressedSize / originalSize)) * 100);
-  
-  return {
-    success: true,
-    data: compressedPdfBytes.buffer,
-    originalSize,
-    compressedSize,
-    compressionRate
-  };
 }
 
 /**
- * Protects a PDF with password encryption and permission controls
- * @param {ArrayBuffer} fileData - The PDF file data
- * @param {Object} options - Protection options with password and permissions
- * @returns {Object} Result containing protected PDF data
+ * Protects a PDF with password
  */
 async function handleProtectPDF(fileData, options) {
-  // Check required options
-  if (!options.password) {
-    throw new Error('Password is required for protection');
-  }
-  
-  // Load the existing PDF
-  const pdfBytes = new Uint8Array(fileData);
-  const pdfDoc = await PDFDocument.load(pdfBytes, {
-    // Allow loading already-encrypted PDFs
-    ignoreEncryption: true
-  });
-  
-  // Set up protection options
-  const userPassword = options.password;
-  const ownerPassword = options.password + '_owner';
-  
-  // Configure permissions
-  const permissions = {
-    // Default all to false, then enable based on options
-    printing: false,
-    modifying: false,
-    copying: false,
-    annotating: false,
-    fillingForms: false,
-    contentAccessibility: true, // Always allow accessibility
-    documentAssembly: false
-  };
-  
-  // Apply permissions from options
-  if (options.permissions) {
-    if (options.permissions.printing) {
-      permissions.printing = true;
+  try {
+    if (!options.password) {
+      throw new Error('Password is required');
     }
     
-    if (options.permissions.copying) {
-      permissions.copying = true;
+    // Load the PDF document
+    const pdfBytes = new Uint8Array(fileData);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    
+    // Set up permissions
+    const permissions = {
+      printing: 'highResolution',
+      modifying: false,
+      copying: true,
+      annotating: false,
+      fillingForms: true,
+      contentAccessibility: true,
+      documentAssembly: false
+    };
+    
+    // Apply custom permissions if provided
+    if (options.permissions) {
+      if (options.permissions.printing !== undefined) {
+        permissions.printing = options.permissions.printing ? 'highResolution' : 'none';
+      }
+      
+      if (options.permissions.copying !== undefined) {
+        permissions.copying = options.permissions.copying;
+      }
+      
+      if (options.permissions.modifying !== undefined) {
+        permissions.modifying = options.permissions.modifying;
+        permissions.annotating = options.permissions.modifying;
+        permissions.fillingForms = options.permissions.modifying;
+        permissions.documentAssembly = options.permissions.modifying;
+      }
     }
     
-    if (options.permissions.modifying) {
-      permissions.modifying = true;
-      permissions.annotating = true;
-      permissions.fillingForms = true;
-      permissions.documentAssembly = true;
-    }
+    // Encrypt the document
+    pdfDoc.encrypt({
+      userPassword: options.password,
+      ownerPassword: options.password + '_owner',
+      permissions
+    });
+    
+    // Save the protected PDF
+    const protectedPdfBytes = await pdfDoc.save();
+    
+    return {
+      success: true,
+      data: protectedPdfBytes.buffer,
+      size: protectedPdfBytes.length,
+      isProtected: true,
+      permissions: options.permissions || {}
+    };
+  } catch (error) {
+    console.error('Error in PDF protection:', error);
+    throw error;
   }
-  
-  // Encrypt the document with the specified options
-  pdfDoc.encrypt({
-    userPassword,
-    ownerPassword,
-    permissions: {
-      // Map our permissions to PDF-lib permissions
-      printing: permissions.printing ? 'highResolution' : 'none',
-      modifying: permissions.modifying,
-      copying: permissions.copying,
-      annotating: permissions.annotating,
-      fillingForms: permissions.fillingForms,
-      contentAccessibility: permissions.contentAccessibility,
-      documentAssembly: permissions.documentAssembly
-    }
-  });
-  
-  // Save the encrypted PDF
-  const encryptedPdfBytes = await pdfDoc.save();
-  
-  return {
-    success: true,
-    data: encryptedPdfBytes.buffer,
-    size: encryptedPdfBytes.length,
-    isProtected: true,
-    permissions: permissions
-  };
 }
 
 /**
- * Splits a PDF into multiple files based on page ranges
- * @param {ArrayBuffer} fileData - The PDF file data
- * @param {Object} options - Split options with page ranges
- * @returns {Object} Result containing array of split PDF files
+ * Splits a PDF into multiple files
  */
 async function handleSplitPDF(fileData, options) {
-  // Load the original PDF
-  const pdfBytes = new Uint8Array(fileData);
-  const sourcePdfDoc = await PDFDocument.load(pdfBytes);
-  const totalPages = sourcePdfDoc.getPageCount();
-  
-  // Determine the page ranges to split
-  let pageRanges = [];
-  
-  if (options.pageRanges && options.pageRanges.length > 0) {
-    // Use specified page ranges
-    pageRanges = options.pageRanges;
-  } else if (options.pageRange === 'custom' && options.customPages) {
-    // Parse ranges like "1-5,8,11-13"
-    const rangeStr = options.customPages.trim();
-    const ranges = rangeStr.split(',');
+  try {
+    // Load the PDF document
+    const pdfBytes = new Uint8Array(fileData);
+    const sourcePdfDoc = await PDFDocument.load(pdfBytes);
+    const totalPages = sourcePdfDoc.getPageCount();
     
-    for (const range of ranges) {
-      const trimmedRange = range.trim();
-      if (trimmedRange.includes('-')) {
-        const [startStr, endStr] = trimmedRange.split('-');
-        const start = parseInt(startStr.trim());
-        const end = parseInt(endStr.trim());
-        
-        if (!isNaN(start) && !isNaN(end) && start > 0 && end <= totalPages && start <= end) {
-          pageRanges.push({ start, end });
-        }
-      } else {
-        const pageNum = parseInt(trimmedRange);
-        if (!isNaN(pageNum) && pageNum > 0 && pageNum <= totalPages) {
-          pageRanges.push({ start: pageNum, end: pageNum });
+    // Determine the page ranges to split
+    let pageRanges = [];
+    
+    if (options.pageRange === 'custom' && options.customPages) {
+      // Parse ranges like "1-5,8,11-13"
+      const customRanges = options.customPages.split(',');
+      
+      for (const range of customRanges) {
+        const trimmed = range.trim();
+        if (trimmed.includes('-')) {
+          const [startStr, endStr] = trimmed.split('-');
+          const start = parseInt(startStr.trim());
+          const end = parseInt(endStr.trim());
+          
+          if (!isNaN(start) && !isNaN(end) && start > 0 && end <= totalPages && start <= end) {
+            pageRanges.push({ start, end });
+          }
+        } else {
+          const pageNum = parseInt(trimmed);
+          if (!isNaN(pageNum) && pageNum > 0 && pageNum <= totalPages) {
+            pageRanges.push({ start: pageNum, end: pageNum });
+          }
         }
       }
+    } else {
+      // Split into individual pages
+      for (let i = 1; i <= totalPages; i++) {
+        pageRanges.push({ start: i, end: i });
+      }
     }
-  } else {
-    // Split into individual pages
-    pageRanges = Array.from({ length: totalPages }, (_, i) => ({ 
-      start: i + 1, 
-      end: i + 1 
-    }));
+    
+    // Process each range
+    const files = [];
+    
+    for (const range of pageRanges) {
+      try {
+        // Create a new document for this range
+        const newPdfDoc = await PDFDocument.create();
+        
+        // Add pages from the range (adjusting for 0-based index)
+        const pageIndexes = [];
+        for (let i = range.start - 1; i < range.end; i++) {
+          pageIndexes.push(i);
+        }
+        
+        // Copy the pages
+        const copiedPages = await newPdfDoc.copyPages(sourcePdfDoc, pageIndexes);
+        
+        // Add each copied page
+        for (const page of copiedPages) {
+          newPdfDoc.addPage(page);
+        }
+        
+        // Save the new PDF
+        const newPdfBytes = await newPdfDoc.save();
+        
+        // Add to result
+        files.push({
+          name: `split_${range.start}${range.end !== range.start ? `-${range.end}` : ''}.pdf`,
+          data: newPdfBytes.buffer,
+          range: `${range.start}-${range.end}`,
+          size: newPdfBytes.length
+        });
+      } catch (error) {
+        console.error(`Error processing page range ${range.start}-${range.end}:`, error);
+      }
+    }
+    
+    return {
+      success: true,
+      files,
+      totalFiles: files.length
+    };
+  } catch (error) {
+    console.error('Error in PDF splitting:', error);
+    throw error;
   }
-  
-  // Create a separate PDF for each range
-  const files = [];
-  
-  for (const range of pageRanges) {
-    // Create a new document for this range
-    const newPdfDoc = await PDFDocument.create();
-    
-    // Add pages from the range (adjusting for 0-based index)
-    const pageIndexes = [];
-    for (let i = range.start - 1; i < range.end; i++) {
-      pageIndexes.push(i);
-    }
-    
-    // Copy the pages to the new document
-    const copiedPages = await newPdfDoc.copyPages(sourcePdfDoc, pageIndexes);
-    
-    // Add each copied page to the new document
-    for (const page of copiedPages) {
-      newPdfDoc.addPage(page);
-    }
-    
-    // Save the new PDF
-    const newPdfBytes = await newPdfDoc.save();
-    
-    // Generate a filename for this range
-    const name = `split_${range.start}${range.end !== range.start ? `-${range.end}` : ''}.pdf`;
-    
-    // Add to the result files
-    files.push({
-      name,
-      data: newPdfBytes.buffer,
-      range: `${range.start}-${range.end}`,
-      size: newPdfBytes.length
-    });
-  }
-  
-  return {
-    success: true,
-    files,
-    totalFiles: files.length
-  };
 }
 
 /**
- * Merges multiple PDF documents into a single PDF
- * @param {Array<ArrayBuffer>} filesData - Array of PDF file data
- * @param {Object} options - Merge options
- * @returns {Object} Result containing merged PDF data
+ * Merges multiple PDF documents
  */
 async function handleMergePDFs(filesData, options) {
-  if (!Array.isArray(filesData) || filesData.length === 0) {
-    throw new Error('No PDF files provided for merging');
-  }
-  
-  // Create a new document for the merged PDF
-  const mergedPdfDoc = await PDFDocument.create();
-  
-  // Track total pages
-  let totalPages = 0;
-  
-  // Process each PDF file
-  for (let i = 0; i < filesData.length; i++) {
-    const fileData = filesData[i];
-    
-    try {
-      // Load the PDF document
-      const pdfBytes = new Uint8Array(fileData);
-      const sourcePdfDoc = await PDFDocument.load(pdfBytes, {
-        // Allow loading encrypted PDFs
-        ignoreEncryption: true
-      });
-      
-      // Get all pages from this document
-      const pageCount = sourcePdfDoc.getPageCount();
-      const pageIndexes = Array.from({ length: pageCount }, (_, i) => i);
-      
-      // Copy all pages
-      const copiedPages = await mergedPdfDoc.copyPages(sourcePdfDoc, pageIndexes);
-      
-      // Add all copied pages to the merged document
-      for (const page of copiedPages) {
-        mergedPdfDoc.addPage(page);
-      }
-      
-      // Update total pages count
-      totalPages += pageCount;
-    } catch (error) {
-      console.error(`Error processing PDF ${i + 1}:`, error);
-      throw new Error(`Failed to process PDF ${i + 1}: ${error.message}`);
+  try {
+    if (!Array.isArray(filesData) || filesData.length === 0) {
+      throw new Error('No PDF files provided for merging');
     }
+    
+    // Create a new document for the merged PDF
+    const mergedPdfDoc = await PDFDocument.create();
+    
+    // Track total pages
+    let totalPages = 0;
+    
+    // Process each PDF file
+    for (let i = 0; i < filesData.length; i++) {
+      const fileData = filesData[i];
+      
+      try {
+        // Load the PDF document
+        const pdfBytes = new Uint8Array(fileData);
+        const sourcePdfDoc = await PDFDocument.load(pdfBytes);
+        
+        // Get all pages from this document
+        const pageCount = sourcePdfDoc.getPageCount();
+        const pageIndexes = Array.from({ length: pageCount }, (_, i) => i);
+        
+        // Copy all pages
+        const copiedPages = await mergedPdfDoc.copyPages(sourcePdfDoc, pageIndexes);
+        
+        // Add all copied pages to the merged document
+        for (const page of copiedPages) {
+          mergedPdfDoc.addPage(page);
+        }
+        
+        // Update total pages count
+        totalPages += pageCount;
+      } catch (error) {
+        console.error(`Error processing PDF ${i + 1}:`, error);
+        // Continue with other files
+      }
+    }
+    
+    // Save the merged PDF
+    const mergedPdfBytes = await mergedPdfDoc.save();
+    
+    return {
+      success: true,
+      data: mergedPdfBytes.buffer,
+      size: mergedPdfBytes.length,
+      pageCount: totalPages,
+      totalMergedFiles: filesData.length
+    };
+  } catch (error) {
+    console.error('Error in PDF merging:', error);
+    throw error;
   }
-  
-  // Save the merged PDF
-  const mergedPdfBytes = await mergedPdfDoc.save();
-  
-  return {
-    success: true,
-    data: mergedPdfBytes.buffer,
-    size: mergedPdfBytes.length,
-    pageCount: totalPages,
-    totalMergedFiles: filesData.length
-  };
-}
-
-/**
- * Helper function to convert data URL to binary array
- * @param {string} dataUrl - Data URL string
- * @returns {Uint8Array} Binary array
- */
-function dataUrlToUint8Array(dataUrl) {
-  const parts = dataUrl.split(',');
-  const base64 = parts[1];
-  const binary = atob(base64);
-  const uint8Array = new Uint8Array(binary.length);
-  
-  for (let i = 0; i < binary.length; i++) {
-    uint8Array[i] = binary.charCodeAt(i);
-  }
-  
-  return uint8Array;
 }

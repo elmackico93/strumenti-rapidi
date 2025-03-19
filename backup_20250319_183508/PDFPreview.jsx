@@ -28,7 +28,7 @@ const PDFPreview = ({ files, options, isLoading }) => {
   
   // Load PDF preview when file changes
   useEffect(() => {
-    if (!files || !Array.isArray(files) || files.length === 0 || !window.pdfjsLib) return;
+    if (!files || files.length === 0 || !window.pdfjsLib) return;
     
     // Clear previous preview
     if (preview) {
@@ -178,7 +178,7 @@ const PDFPreview = ({ files, options, isLoading }) => {
   }
   
   // Render message if no files
-  if (!files || !Array.isArray(files) || files.length === 0) {
+  if (!files || files.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 bg-gray-100 dark:bg-gray-800 rounded-lg">
         <svg className="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
