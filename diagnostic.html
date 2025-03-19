@@ -55,6 +55,16 @@
         button:hover {
             background-color: #c0392b;
         }
+        .log-output {
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 <body>
@@ -82,42 +92,75 @@
     </div>
     
     <div class="card">
+        <h2>Logger Output</h2>
+        <div id="logger" class="log-output"></div>
+        <button id="clearLogs" style="margin-top: 10px; background-color: #444;">Clear Logs</button>
+    </div>
+    
+    <div class="card">
         <h2>Fix Recommendations</h2>
         <div id="recommendations">Running diagnostics...</div>
     </div>
     
     <script>
+        // Logger function
+        function log(message, type = 'info') {
+            const loggerDiv = document.getElementById('logger');
+            const logEntry = document.createElement('div');
+            logEntry.className = type;
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.textContent = `[${timestamp}] [${type.toUpperCase()}] ${message}`;
+            loggerDiv.appendChild(logEntry);
+            loggerDiv.scrollTop = loggerDiv.scrollHeight;
+        }
+        
+        document.getElementById('clearLogs').addEventListener('click', function() {
+            document.getElementById('logger').innerHTML = '';
+        });
+        
         document.addEventListener('DOMContentLoaded', function() {
             // Display system information
             const sysInfoElem = document.getElementById('sysinfo');
+            log("Starting system information check");
             sysInfoElem.innerHTML = `
                 <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
                 <p><strong>Browser:</strong> ${getBrowserInfo()}</p>
                 <p><strong>Platform:</strong> ${navigator.platform}</p>
             `;
+            log("System information check completed");
             
             // Check for PDF.js
             const pdfjsElem = document.getElementById('pdfjscheck');
+            log("Starting PDF.js check");
             if (window.pdfjsLib) {
                 pdfjsElem.innerHTML = `
                     <p class="success">✓ PDF.js is available</p>
                     <p>Version: ${window.pdfjsLib.version || 'Unknown'}</p>
                     <p>Worker Source: ${window.pdfjsLib.GlobalWorkerOptions?.workerSrc || 'Not configured'}</p>
                 `;
+                log("PDF.js is available", "success");
+                if (window.pdfjsLib.GlobalWorkerOptions?.workerSrc) {
+                    log(`PDF.js worker source: ${window.pdfjsLib.GlobalWorkerOptions.workerSrc}`, "success");
+                } else {
+                    log("PDF.js worker source not configured", "error");
+                }
             } else {
                 pdfjsElem.innerHTML = `
                     <p class="error">✗ PDF.js is not available!</p>
                     <p>This is a critical issue that must be fixed. Make sure PDF.js is properly loaded in index.html.</p>
                 `;
+                log("PDF.js is not available", "error");
             }
             
             // Check for Web Worker support
             const workerElem = document.getElementById('workercheck');
+            log("Starting Web Worker support check");
             if (window.Worker) {
                 workerElem.innerHTML = `
                     <p class="success">✓ Web Workers are supported</p>
                     <p>Testing worker creation...</p>
                 `;
+                log("Web Workers are supported", "success");
                 
                 try {
                     const workerBlob = new Blob(['self.onmessage = function() { self.postMessage("ok"); }'], { type: 'application/javascript' });
@@ -127,6 +170,7 @@
                     worker.onmessage = function(e) {
                         if (e.data === "ok") {
                             workerElem.innerHTML += `<p class="success">✓ Worker successfully created and working</p>`;
+                            log("Worker successfully created and working", "success");
                         }
                     };
                     
@@ -139,12 +183,14 @@
                     }, 1000);
                 } catch (error) {
                     workerElem.innerHTML += `<p class="error">✗ Error creating worker: ${error.message}</p>`;
+                    log(`Error creating worker: ${error.message}`, "error");
                 }
             } else {
                 workerElem.innerHTML = `
                     <p class="error">✗ Web Workers are not supported in this browser!</p>
                     <p>This is a critical requirement for PDF functionality.</p>
                 `;
+                log("Web Workers are not supported in this browser", "error");
             }
             
             // PDF Service check button
@@ -158,9 +204,11 @@
             
             testButton.addEventListener('click', async function() {
                 serviceElem.innerHTML = `<p>Testing PDF service initialization...</p>`;
+                log("Testing PDF service initialization");
                 
                 try {
                     // Attempt to load and initialize the PDF service
+                    log("Importing pdfService module");
                     const module = await import('/src/services/pdfService.js');
                     
                     if (module && module.pdfService) {
@@ -168,22 +216,26 @@
                             serviceElem.innerHTML = `
                                 <p class="success">✓ PDF service initialized successfully</p>
                             `;
+                            log("PDF service initialized successfully", "success");
                         } else {
                             serviceElem.innerHTML = `
                                 <p class="error">✗ PDF service worker failed to initialize</p>
                                 <p>Error: ${module.pdfService.workerInitError?.message || 'Unknown error'}</p>
                             `;
+                            log(`PDF service worker failed to initialize: ${module.pdfService.workerInitError?.message || 'Unknown error'}`, "error");
                         }
                     } else {
                         serviceElem.innerHTML = `
                             <p class="error">✗ PDF service not found or not exported correctly</p>
                         `;
+                        log("PDF service not found or not exported correctly", "error");
                     }
                 } catch (error) {
                     serviceElem.innerHTML = `
                         <p class="error">✗ Error importing PDF service: ${error.message}</p>
                         <pre>${error.stack}</pre>
                     `;
+                    log(`Error importing PDF service: ${error.message}`, "error");
                 }
             });
             
@@ -192,19 +244,23 @@
             let recommendations = [];
             
             setTimeout(() => {
+                log("Generating recommendations");
                 // PDF.js check
                 if (!window.pdfjsLib) {
                     recommendations.push('Make sure PDF.js is properly loaded in index.html');
+                    log("Recommendation: Make sure PDF.js is properly loaded in index.html", "info");
                 }
                 
                 // Worker src check
                 if (!window.pdfjsLib?.GlobalWorkerOptions?.workerSrc) {
                     recommendations.push('Configure PDF.js worker source in index.html');
+                    log("Recommendation: Configure PDF.js worker source in index.html", "info");
                 }
                 
                 // Web Worker support
                 if (!window.Worker) {
                     recommendations.push('Use a browser that supports Web Workers');
+                    log("Recommendation: Use a browser that supports Web Workers", "info");
                 }
                 
                 // Final recommendations
@@ -226,6 +282,7 @@
                         <p class="success">✓ No issues detected in the diagnostics</p>
                         <p>If you're still experiencing problems, please check the specific PDF operation that's failing.</p>
                     `;
+                    log("No issues detected in the diagnostics", "success");
                 }
             }, 2000);
             

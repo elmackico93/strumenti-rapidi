@@ -1,6 +1,9 @@
 // StrumentiRapidi.it PDF Worker Module
 // Fixed implementation using classic worker mode with importScripts
 
+// StrumentiRapidi.it PDF Worker Module
+// Fixed implementation using classic worker mode with importScripts
+
 // This worker is intentionally NOT a module to allow importScripts usage
 // Load required libraries
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');

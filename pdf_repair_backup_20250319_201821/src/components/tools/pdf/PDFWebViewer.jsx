@@ -1,4 +1,4 @@
-// src/components/tools/pdf/PDFWebViewer.jsx - FIXED VERSION
+// src/components/tools/pdf/PDFWebViewer.jsx
 import { useState, useEffect, useRef } from 'react';
 
 const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
@@ -10,18 +10,9 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
   const [error, setError] = useState(null);
   const [renderTask, setRenderTask] = useState(null);
 
-  // Debug information
-  useEffect(() => {
-    console.log("PDFWebViewer mounted with file:", file ? file.name : "none");
-    return () => console.log("PDFWebViewer unmounted");
-  }, [file]);
-
   // Load PDF
   useEffect(() => {
-    if (!file || !(file instanceof File || file instanceof Blob)) {
-      console.log("No valid file provided to PDFWebViewer");
-      return;
-    }
+    if (!file || !(file instanceof File || file instanceof Blob)) return;
     
     const loadPDF = async () => {
       setIsLoading(true);
@@ -42,14 +33,11 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
             }
             
             // Load PDF document
-            console.log("Creating PDF.js loading task");
             const loadingTask = window.pdfjsLib.getDocument({
               data: new Uint8Array(event.target.result)
             });
             
-            console.log("Awaiting PDF document loading");
             const pdf = await loadingTask.promise;
-            console.log("PDF document loaded successfully, pages:", pdf.numPages);
             
             // Set document and update page count
             setPdfDoc(pdf);
@@ -93,38 +81,22 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
     };
   }, [file]);
 
-  // Render page - Fixed with better checking for canvas ref
+  // Render page
   useEffect(() => {
-    if (!pdfDoc) return;
-    if (!canvasRef || !canvasRef.current) {
-      console.warn("Canvas ref is not available yet");
-      return;
-    }
+    if (!pdfDoc || !canvasRef.current) return;
     
     const renderPage = async () => {
       try {
-        // Double check canvas is available
-        if (!canvasRef.current) {
-          console.error("Canvas reference is null during rendering");
-          return;
-        }
-        
         // Cancel any existing render task
         if (renderTask) {
           renderTask.cancel();
           setRenderTask(null);
         }
         
-        console.log(`Rendering page ${currentPage} of ${pdfDoc.numPages}`);
         const page = await pdfDoc.getPage(currentPage);
         const viewport = page.getViewport({ scale });
         
         const canvas = canvasRef.current;
-        if (!canvas) {
-          console.error("Canvas is null after getting page");
-          return;
-        }
-        
         const context = canvas.getContext('2d');
         
         canvas.height = viewport.height;
@@ -138,31 +110,25 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
           viewport: viewport
         };
         
-        console.log("Starting page render");
         const task = page.render(renderContext);
         setRenderTask(task);
         
         await task.promise;
-        console.log("Page render complete");
         setRenderTask(null);
       } catch (err) {
-        if (err && err.name === 'RenderingCancelledException') {
+        if (err.name === 'RenderingCancelledException') {
           console.log('Rendering was cancelled');
         } else {
           console.error("Error rendering page:", err);
-          setError("Error rendering page: " + (err ? err.message : "unknown error"));
+          setError("Error rendering page");
         }
       }
     };
     
-    // Use a small timeout to ensure the canvas is ready
-    const timeoutId = setTimeout(() => {
-      renderPage();
-    }, 50);
+    renderPage();
     
     // Cleanup function
     return () => {
-      clearTimeout(timeoutId);
       if (renderTask) {
         renderTask.cancel();
         setRenderTask(null);
@@ -181,9 +147,9 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
   // Render loading state
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 bg-gray-100 dark:bg-gray-800 rounded-lg">
+      <div className="flex items-center justify-center h-64 bg-gray-100 dark:bg-gray-800 rounded-lg">
         <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-red-500 mb-4"></div>
-        <p className="text-gray-600 dark:text-gray-400">Loading document...</p>
+        <p className="text-gray-600 dark:text-gray-400 ml-3">Loading document...</p>
       </div>
     );
   }
@@ -196,15 +162,6 @@ const PDFWebViewer = ({ file, pageNumber = 1, scale = 1.0 }) => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <p className="text-center">{error}</p>
-      </div>
-    );
-  }
-
-  // If document is loaded but there's no canvas yet, show a placeholder
-  if (!canvasRef.current) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 bg-gray-100 dark:bg-gray-800 rounded-lg">
-        <p className="text-gray-600 dark:text-gray-400">Preparing document viewer...</p>
       </div>
     );
   }

@@ -1,15 +1,13 @@
-// src/components/wizard/ToolWizard.jsx - FIXED VERSION
+// src/components/wizard/ToolWizard.jsx
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import StepIndicator from '../ui/StepIndicator';
 import { useOS } from '../../context/OSContext';
 
 const ToolWizard = ({ title, description, steps, toolId, themeColor }) => {
-  // All hooks must be called in the same order every render
   const [currentStep, setCurrentStep] = useState(0);
   const [wizardData, setWizardData] = useState({});
   const [result, setResult] = useState(null);
-  // Call useOS hook here consistently
   const { osType, isMobile } = useOS();
   
   // Reset wizard when tool changes
@@ -57,7 +55,7 @@ const ToolWizard = ({ title, description, steps, toolId, themeColor }) => {
       return {
         initial: { opacity: 0, x: 20, scale: 0.95 },
         animate: { opacity: 1, x: 0, scale: 1 },
-        exit: { opacity: 0, x: -20, scale: 0.95 },
+exit: { opacity: 0, x: -20, scale: 0.95 },
         transition: { type: "spring", stiffness: 300, damping: 30 }
       };
     } else {

@@ -54,7 +54,7 @@ If issues persist after applying the fixes, check the following:
 2. Make sure all fixes were applied correctly
 3. Clear browser cache and reload the application
 4. Try a different browser to isolate browser-specific issues
-5. Open the diagnostic.html file to get detailed information about your environment
+5. Open the diagnostic.html file for detailed information about your environment
 
 ## Technical Notes
 

@@ -97,7 +97,7 @@ const PDFConfigurationStep = ({ data, updateData, goNext, goBack, themeColor, co
     
     // Use forceComplete to ensure progression to the result step
     if (typeof forceComplete === 'function') {
-      typeof forceComplete === "function" && typeof forceComplete === "function" && forceComplete();
+      typeof forceComplete === "function" && forceComplete();
     } else {
       goNext();
     }
