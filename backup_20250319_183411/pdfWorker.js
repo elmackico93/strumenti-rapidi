@@ -12,10 +12,19 @@ importScripts('https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js');
 importScripts('https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js');
 
 // Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-// Reference to global PDF libraries
-const { PDFDocument, StandardFonts, rgb, degrees, PageSizes } = PDFLib;
+// CSP compatibility for PDF.js worker
+try {
+  // Try to use the direct path first
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('/js/pdf.worker.js', window.location.origin).href;
+} catch (e) {
+  console.warn("PDF.js worker source URL error:", e);
+  // Fallback to checking if the script is already available as a variable
+  if (typeof pdfjsWorkerSrc !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorkerSrc;
+  } else {
+    console.error("PDF.js worker source is not defined. PDF functionality may not work.");
+  }
+}
 
 // Listen for messages from the main thread
 self.onmessage = async function(e) {
