@@ -39,7 +39,7 @@ function App() {
   return (
     <ThemeProvider>
       <OSProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <React.Suspense fallback={<div>Loading...</div>}>
             {startTransition(() => (
               <Routes>
