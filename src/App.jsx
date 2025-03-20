@@ -1,4 +1,3 @@
-import React, { startTransition } from "react";
 // src/App.jsx
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './context/ThemeContext';
@@ -39,25 +38,13 @@ function App() {
   return (
     <ThemeProvider>
       <OSProvider>
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <React.Suspense fallback={<div>Loading...</div>}>
-            {startTransition(() => (
-              <Routes>
-                <Route 
-                  path="/" 
-                  element={<MainLayout />} 
-                  future={{ v7_relativeSplatPath: true }}
-                >
-                  <Route index element={<Home />} />
-                  <Route 
-                    path="tools/:toolId" 
-                    element={<ToolsPage />} 
-                    future={{ v7_relativeSplatPath: true }} 
-                  />
-                </Route>
-              </Routes>
-            ))}
-          </React.Suspense>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<MainLayout />}>
+              <Route index element={<Home />} />
+              <Route path="tools/:toolId" element={<ToolsPage />} />
+            </Route>
+          </Routes>
         </BrowserRouter>
       </OSProvider>
     </ThemeProvider>
