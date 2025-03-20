@@ -1,3 +1,15 @@
+#!/bin/bash
+
+# Set file path
+APP_FILE="/home/ubuntu/Documenti/GitHub/strumenti-rapidi/src/App.jsx"
+BACKUP_FILE="$APP_FILE.backup_$(date +%Y%m%d%H%M%S)"
+
+# Create backup
+cp "$APP_FILE" "$BACKUP_FILE"
+echo "✅ Created backup at $BACKUP_FILE"
+
+# The corrected App.jsx content
+cat > "$APP_FILE" << 'END_CONTENT'
 import React, { startTransition } from "react";
 // src/App.jsx
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
@@ -65,3 +77,12 @@ function App() {
 }
 
 export default App;
+END_CONTENT
+
+echo "✅ Fixed JSX syntax in $APP_FILE"
+echo "   - Corrected the closing tag for <ToolsPage>"
+echo "   - Moved 'future' prop from element to Route component"
+echo "   - Added proper React import"
+echo "   - Improved code formatting for clarity"
+echo ""
+echo "You can now run 'npm run dev' to verify the fix"
